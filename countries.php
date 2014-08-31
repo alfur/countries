@@ -90,13 +90,14 @@ abstract class AbstractConverter implements Converter {
 	 * @param string $sGlue
 	 * @return array
 	 */
-	protected function convertArrays(array &$aInput, $sGlue = ',') {
+	protected function convertArrays(&$aInput, $sGlue = ',') {
 		$aInput = array_map(function ($value) use ($sGlue) {
-			if (is_array($value)) {
+                        //if $value is an array or $value is an object. if it is an object cast it to an array and store it an $value
+			if (is_array($value) || is_object($value) && (($value = (array)$value)) != null) {
 				return implode($sGlue, $value);
 			}
 			return $value;
-		}, $aInput);
+		}, (array)$aInput);
 		return $aInput;
 	}
 
@@ -236,9 +237,60 @@ class XmlConverter extends AbstractConverter {
 		$this->oDom->documentElement->appendChild($oCountryNode);
 	}
 }
+/**
+ * Class CsvExtendedConverter
+ * @author Mario Aichinger <aichingm@gmail.com>
+ * The exported file contains sub-objects in the form for example the translations object: "cy:Awstria,de:Österreich,es:Austria"
+ */
+class CsvExtendedConverter extends CsvConverter{
+    
+    protected function convertArrays(&$aInput, $sGlue = ',') {
+            $aInput = array_map(function ($value) use ($sGlue) {
+                    if (is_array($value)) {
+                            return implode($sGlue, $value);
+                    }elseif(is_object($value)){
+                            $concatenated = array();
+                            foreach ($value as $k => $v) {
+                                    $concatenated[] = $k.":".$v;
+                            }
+                            return implode($sGlue, $concatenated);
+                    }
+                    return $value;
+            }, (array)$aInput);
+            return $aInput;
+    }
+    
+}
 
-$aCountriesSrc = json_decode(file_get_contents('countries.json'), true);
+/**
+ * Class XmlExtendedConverter
+ * @author Mario Aichinger <aichingm@gmail.com>
+ * The exported file contains sub-objects in the form for example the translations object: translations="cy:Awstria,de:Österreich,es:Austria"
+ */
+class XmlExtendedConverter extends XmlConverter{
+    
+    protected function convertArrays(&$aInput, $sGlue = ',') {
+            $aInput = array_map(function ($value) use ($sGlue) {
+                    if (is_array($value)) {
+                            return implode($sGlue, $value);
+                    }elseif(is_object($value)){
+                            $concatenated = array();
+                            foreach ($value as $k => $v) {
+                                    $concatenated[] = $k.":".$v;
+                            }
+                            return implode($sGlue, $concatenated);
+                    }
+                    return $value;
+            }, (array)$aInput);
+            return $aInput;
+    }
+    
+}
+
+$aCountriesSrc = json_decode(file_get_contents('countries.json'), false);
 (new JsonConverter($aCountriesSrc))->save('countries.json');
 (new JsonConverterUnicode($aCountriesSrc))->save('countries-unescaped.json');
 (new CsvConverter($aCountriesSrc))->save('countries.csv');
 (new XmlConverter($aCountriesSrc))->save('countries.xml');
+(new CsvExtendedConverter($aCountriesSrc))->save('countries.ext.csv');
+(new XmlExtendedConverter($aCountriesSrc))->save('countries.ext.xml');
