@@ -92,13 +92,27 @@ abstract class AbstractConverter implements Converter {
 	 */
 	protected function convertArrays(&$aInput, $sGlue = ',') {
 		$aInput = array_map(function ($value) use ($sGlue) {
-                        //if $value is an array or $value is an object. if it is an object cast it to an array and store it an $value
-			if (is_array($value) || is_object($value) && (($value = (array)$value)) != null) {
-				return implode($sGlue, $value);
-			}
-			return $value;
+                            return $this->recursiveImplode($value, $sGlue);
 		}, (array)$aInput);
 		return $aInput;
+	}
+        /**
+	 * Recursively implode elements
+	 * @param array $aInput
+	 * @param $sGlue
+	 * @return string the array recursively imploded with the glue
+	 */
+	private function recursiveImplode($aInput, $sGlue) {
+		// remove empty strings from the array
+		$aInput = array_filter((array)$aInput, function($entry){
+			return $entry !== '';
+		});
+		array_walk($aInput, function (&$value) use ($sGlue) {
+			if (is_array($value) || (is_object($value) && (($value = (array)$value)) != null)) {
+				$value = $this->recursiveImplode($value, $sGlue);
+			}
+		});
+		return implode($sGlue, $aInput);
 	}
 
 	/**
@@ -251,7 +265,11 @@ class CsvExtendedConverter extends CsvConverter{
                     }elseif(is_object($value)){
                             $concatenated = array();
                             foreach ($value as $k => $v) {
+                                if(is_object($v)){
+                                    $concatenated[] = $k.":".implode(";",$this->convertArrays($v));
+                                }else{
                                     $concatenated[] = $k.":".$v;
+                                }
                             }
                             return implode($sGlue, $concatenated);
                     }
@@ -276,7 +294,11 @@ class XmlExtendedConverter extends XmlConverter{
                     }elseif(is_object($value)){
                             $concatenated = array();
                             foreach ($value as $k => $v) {
+                                if(is_object($v)){
+                                    $concatenated[] = $k.":".implode(";",$this->convertArrays($v));
+                                }else{
                                     $concatenated[] = $k.":".$v;
+                                }
                             }
                             return implode($sGlue, $concatenated);
                     }
