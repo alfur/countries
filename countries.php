@@ -90,14 +90,29 @@ abstract class AbstractConverter implements Converter {
 	 * @param string $sGlue
 	 * @return array
 	 */
-	protected function convertArrays(array &$aInput, $sGlue = ',') {
+	protected function convertArrays(&$aInput, $sGlue = ',') {
 		$aInput = array_map(function ($value) use ($sGlue) {
-			if (is_array($value)) {
-				return implode($sGlue, $value);
-			}
-			return $value;
-		}, $aInput);
+                            return $this->recursiveImplode($value, $sGlue);
+		}, (array)$aInput);
 		return $aInput;
+	}
+        /**
+	 * Recursively implode elements
+	 * @param array $aInput
+	 * @param $sGlue
+	 * @return string the array recursively imploded with the glue
+	 */
+	private function recursiveImplode($aInput, $sGlue) {
+		// remove empty strings from the array
+		$aInput = array_filter((array)$aInput, function($entry){
+			return $entry !== '';
+		});
+		array_walk($aInput, function (&$value) use ($sGlue) {
+			if (is_array($value) || (is_object($value) && (($value = (array)$value)) != null)) {
+				$value = $this->recursiveImplode($value, $sGlue);
+			}
+		});
+		return implode($sGlue, $aInput);
 	}
 
 	/**
@@ -236,9 +251,68 @@ class XmlConverter extends AbstractConverter {
 		$this->oDom->documentElement->appendChild($oCountryNode);
 	}
 }
+/**
+ * Class CsvExtendedConverter
+ * @author Mario Aichinger <aichingm@gmail.com>
+ * The exported file contains sub-objects in the form for example the translations object: "cy:Awstria,de:Österreich,es:Austria"
+ */
+class CsvExtendedConverter extends CsvConverter{
+    
+    protected function convertArrays(&$aInput, $sGlue = ',') {
+            $aInput = array_map(function ($value) use ($sGlue) {
+                    if (is_array($value)) {
+                            return implode($sGlue, $value);
+                    }elseif(is_object($value)){
+                            $concatenated = array();
+                            foreach ($value as $k => $v) {
+                                if(is_object($v)){
+                                    $concatenated[] = $k.":".implode(";",$this->convertArrays($v));
+                                }else{
+                                    $concatenated[] = $k.":".$v;
+                                }
+                            }
+                            return implode($sGlue, $concatenated);
+                    }
+                    return $value;
+            }, (array)$aInput);
+            return $aInput;
+    }
+    
+}
 
-$aCountriesSrc = json_decode(file_get_contents('countries.json'), true);
+/**
+ * Class XmlExtendedConverter
+ * @author Mario Aichinger <aichingm@gmail.com>
+ * The exported file contains sub-objects in the form for example the translations object: translations="cy:Awstria,de:Österreich,es:Austria"
+ */
+class XmlExtendedConverter extends XmlConverter{
+    
+    protected function convertArrays(&$aInput, $sGlue = ',') {
+            $aInput = array_map(function ($value) use ($sGlue) {
+                    if (is_array($value)) {
+                            return implode($sGlue, $value);
+                    }elseif(is_object($value)){
+                            $concatenated = array();
+                            foreach ($value as $k => $v) {
+                                if(is_object($v)){
+                                    $concatenated[] = $k.":".implode(";",$this->convertArrays($v));
+                                }else{
+                                    $concatenated[] = $k.":".$v;
+                                }
+                            }
+                            return implode($sGlue, $concatenated);
+                    }
+                    return $value;
+            }, (array)$aInput);
+            return $aInput;
+    }
+    
+}
+
+$aCountriesSrc = json_decode(file_get_contents('countries.json'), false);
 (new JsonConverter($aCountriesSrc))->save('countries.json');
 (new JsonConverterUnicode($aCountriesSrc))->save('countries-unescaped.json');
 (new CsvConverter($aCountriesSrc))->save('countries.csv');
 (new XmlConverter($aCountriesSrc))->save('countries.xml');
+(new CsvExtendedConverter($aCountriesSrc))->save('countries.ext.csv');
+(new XmlExtendedConverter($aCountriesSrc))->save('countries.ext.xml');
